@@ -3,6 +3,7 @@ import java.util.*;
 
 public class Tomasulo {
     // op
+    String[] insKeyWords = { "ADD", "MUL", "SUB", "DIV", "LD", "JUMP" };
     public static final int OP_ADD = 1;
     public static final int OP_SUB = 2;
     public static final int OP_MUL = 3;
@@ -37,19 +38,23 @@ public class Tomasulo {
     public static int MULT = 2;
     public static int LOAD = 2;
 
+    // hardware
     public CalculateStation[] addResverstation;
     public CalculateStation[] mulResverstation;
     public LSStation[] lsResverstation;
+    public int[] F = new int[32];
+    public int[] memory = new int[1000];
 
     public int cur_T;
     // instruction unit
     Vector<String> instructions = new Vector<String>();
+    // status
     Vector<InstructionState> instructionStates = new Vector<InstructionState>();
-    String insStr;
-    String[] insKeyWords = { "ADD", "MUL", "SUB", "DIV", "LD", "JUMP" };
+    public int[] F_state = new int[32];
 
     public Tomasulo() {
         initReserveStation();
+        String insStr;
         insStr = readFile("test1.nel");
         initInsSet(insStr);
         empty_adder = ADDER;
