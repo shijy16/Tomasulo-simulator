@@ -56,10 +56,17 @@ public class Tomasulo {
 
     public Tomasulo() {
         // init
+        initAll();
+        while (step_next())
+            ;
+    }
+
+    public void initAll() {
         initReserveStation();
         String insStr;
         insStr = readFile("test2.nel");
         initRegister();
+        initMemory();
         initInsSet(insStr);
         empty_adder = ADDER;
         empty_mult = MULT;
@@ -67,8 +74,6 @@ public class Tomasulo {
         pc = 0;
         cur_T = -1;
         onJump = false;
-        while (step_next())
-            ;
     }
 
     public int getOp(String order) {
@@ -198,6 +203,12 @@ public class Tomasulo {
         for (int i = 0; i < F.length; i++) {
             F[i] = 0;
             F_state[i] = -1;
+        }
+    }
+
+    public void initMemory() {
+        for (int i = 0; i < memory.length; i++) {
+            memory[i] = 0;
         }
     }
 
