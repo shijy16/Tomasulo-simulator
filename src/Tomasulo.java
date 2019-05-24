@@ -3,13 +3,13 @@ import java.util.*;
 
 public class Tomasulo {
     // op
-    String[] insKeyWords = { "ADD", "MUL", "SUB", "DIV", "LD", "JUMP" };
-    public static final int OP_ADD = 1;
-    public static final int OP_SUB = 2;
-    public static final int OP_MUL = 3;
-    public static final int OP_DIV = 4;
-    public static final int OP_LD = 5;
-    public static final int OP_JUMP = 6;
+    static String[] INSKEY = { "ADD", "SUB", "MUL", "DIV", "LD", "JUMP" };
+    public static final int OP_ADD = 0;
+    public static final int OP_SUB = 1;
+    public static final int OP_MUL = 2;
+    public static final int OP_DIV = 3;
+    public static final int OP_LD = 4;
+    public static final int OP_JUMP = 5;
 
     // reserve station type
     public static final int RS_LS = 20; // load and store
@@ -39,42 +39,181 @@ public class Tomasulo {
     public static int LOAD = 2;
 
     // hardware
-    public CalculateStation[] addResverstation;
-    public CalculateStation[] mulResverstation;
-    public LSStation[] lsResverstation;
+    public CalculateStation[] addReserveStation;
+    public CalculateStation[] mulReserveStation;
+    public LSStation[] lsReserveStation;
     public int[] F = new int[32];
-    public int[] memory = new int[1000];
+    public int[] memory = new int[4096];
+    public static int pc;
 
-    public int cur_T;
+    public static int cur_T;
     // instruction unit
     Vector<String> instructions = new Vector<String>();
     // status
     Vector<InstructionState> instructionStates = new Vector<InstructionState>();
     public int[] F_state = new int[32];
+    boolean onJump;
 
     public Tomasulo() {
+        // init
         initReserveStation();
         String insStr;
-        insStr = readFile("test1.nel");
+        insStr = readFile("test2.nel");
+        initRegister();
         initInsSet(insStr);
         empty_adder = ADDER;
         empty_mult = MULT;
         empty_load = LOAD;
+        pc = 0;
+        cur_T = -1;
+        onJump = false;
+        while (step_next())
+            ;
+    }
+
+    public int getOp(String order) {
+        int res = -1;
+        for (int i = 0; i < INSKEY.length; i++) {
+            if (order.contains(INSKEY[i])) {
+                res = i;
+                break;
+            }
+        }
+        return res;
+    }
+
+    public boolean step_next() {
+        // issue
+        cur_T++;
+        System.out.println("current T: " + String.valueOf(cur_T));
+        if (pc > instructions.size()) {
+            return false;
+        }
+        String cur_order = instructions.get(pc);
+        int curOp = getOp(cur_order);
+        while (curOp == -1) {
+            instructions.remove(pc);
+            cur_order = instructions.get(pc);
+            curOp = getOp(cur_order);
+        }
+
+        // can current order send?
+        boolean canSend = false;
+        if (!onJump) {
+            if (curOp == OP_ADD || curOp == OP_SUB || curOp == OP_JUMP) {
+                for (int i = 0; i < ADD_STATION_NUM; i++) {
+                    if (!addReserveStation[i].busy) {
+                        canSend = true;
+                        if (curOp == OP_JUMP) {
+                            onJump = true;
+                        }
+                        addReserveStation[i].busy = true;
+                        // init instruction state
+                        InstructionState ins = new InstructionState();
+                        ins.init(cur_order, cur_T);
+                        instructionStates.add(ins);
+                        // set reserveStation
+                        addReserveStation[i].op = ins.op;
+                        if (F_state[ins.src1] == -1) {
+                            addReserveStation[i].vj_ok = true;
+                            addReserveStation[i].qj = F[ins.src1];
+                        } else {
+                            addReserveStation[i].vj_ok = false;
+                            addReserveStation[i].vj = F_state[ins.src1];
+                        }
+                        if (curOp != OP_JUMP)
+                            if (F_state[ins.src2] == -1) {
+                                addReserveStation[i].vk_ok = true;
+                                addReserveStation[i].qk = F[ins.src2];
+                            } else {
+                                addReserveStation[i].vk_ok = false;
+                                addReserveStation[i].vk = F_state[ins.src2];
+                            }
+                        // update dst register state
+                        F_state[ins.dst] = addReserveStation[i].id;
+                        break;
+
+                    }
+                }
+            } else if (curOp == OP_MUL || curOp == OP_DIV) {
+                for (int i = 0; i < ADD_STATION_NUM; i++) {
+                    if (!mulReserveStation[i].busy) {
+                        canSend = true;
+                        mulReserveStation[i].busy = true;
+                        // init instruction state
+                        InstructionState ins = new InstructionState();
+                        ins.init(cur_order, cur_T);
+                        instructionStates.add(ins);
+                        // set reserveStation
+                        mulReserveStation[i].op = ins.op;
+                        if (F_state[ins.src1] == -1) {
+                            mulReserveStation[i].vj_ok = true;
+                            mulReserveStation[i].qj = F[ins.src1];
+                        } else {
+                            mulReserveStation[i].vj_ok = false;
+                            mulReserveStation[i].vj = F_state[ins.src1];
+                        }
+                        if (F_state[ins.src2] == -1) {
+                            mulReserveStation[i].vk_ok = true;
+                            mulReserveStation[i].qk = F[ins.src2];
+                        } else {
+                            mulReserveStation[i].vk_ok = false;
+                            mulReserveStation[i].vk = F_state[ins.src2];
+                        }
+                        // update dst register state
+                        F_state[ins.dst] = addReserveStation[i].id;
+                        break;
+                    }
+                }
+            } else if (curOp == OP_LD) {
+                for (int i = 0; i < LS_STATION_NUM; i++) {
+                    if (!lsReserveStation[i].busy) {
+                        canSend = true;
+                        lsReserveStation[i].busy = true;
+                        // init instruction state
+                        InstructionState ins = new InstructionState();
+                        ins.init(cur_order, cur_T);
+                        instructionStates.add(ins);
+                        // set reserveStation
+                        lsReserveStation[i].addr = ins.src1;
+                        F_state[ins.dst] = lsReserveStation[i].id;
+                        break;
+                    }
+                }
+            }
+        }
+        if (canSend)
+            pc++;
+        printStatus();
+        return true;
+    }
+
+    public void printStatus() {
+        for (int i = 0; i < instructionStates.size(); i++) {
+            instructionStates.get(i).printStatus();
+        }
+    }
+
+    public void initRegister() {
+        for (int i = 0; i < F.length; i++) {
+            F[i] = 0;
+            F_state[i] = -1;
+        }
     }
 
     public void initReserveStation() {
-        addResverstation = new CalculateStation[ADD_STATION_NUM];
+        addReserveStation = new CalculateStation[ADD_STATION_NUM];
         int id = 0;
         for (int i = 0; i < ADD_STATION_NUM; i++) {
-            addResverstation[i].init("add" + i, id++);
+            addReserveStation[i] = new CalculateStation("add" + i, id++);
         }
-        mulResverstation = new CalculateStation[MUL_STATION_NUM];
+        mulReserveStation = new CalculateStation[MUL_STATION_NUM];
         for (int i = 0; i < MUL_STATION_NUM; i++) {
-            addResverstation[i].init("mul" + i, id++);
+            mulReserveStation[i] = new CalculateStation("mul" + i, id++);
         }
-        lsResverstation = new LSStation[LS_STATION_NUM];
+        lsReserveStation = new LSStation[LS_STATION_NUM];
         for (int i = 0; i < LS_STATION_NUM; i++) {
-            addResverstation[i].init("ls" + i, id++);
+            lsReserveStation[i] = new LSStation("mul" + i, id++);
         }
     }
 
@@ -105,8 +244,8 @@ public class Tomasulo {
     public void initInsSet(String insStr) {
         String[] t = insStr.split("\n");
         for (int i = 0; i < t.length; i++) {
-            for (int j = 0; j < insKeyWords.length; j++) {
-                if (t[i].contains(insKeyWords[j])) {
+            for (int j = 0; j < INSKEY.length; j++) {
+                if (t[i].contains(INSKEY[j])) {
                     instructions.add(t[i]);
                     break;
                 }

@@ -7,12 +7,12 @@ public class CalculateStation {
 
     // for calculation
     int op;
-    String qj;
-    String qk;
+    float qj;
+    float qk;
     boolean vj_ok;
     boolean vk_ok;
-    int vj;
-    int vk;
+    float vj;
+    float vk;
 
     public CalculateStation(String n, int t) {
         this.init(n, t);
