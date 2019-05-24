@@ -51,17 +51,28 @@ public class Tomasulo {
     Vector<String> instructions = new Vector<String>();
     // status
     Vector<InstructionState> instructionStates = new Vector<InstructionState>();
+    // wait queue
+    Queue<Integer> addWQ = new LinkedList<Integer>();
+    Queue<Integer> mulWQ = new LinkedList<Integer>();
+    Queue<Integer> lsWQ = new LinkedList<Integer>();
+
     public int[] F_state = new int[32];
     boolean onJump;
 
     public Tomasulo() {
         // init
         initAll();
-        while (step_next())
-            ;
+        Scanner sc = new Scanner(System.in);
+        while (sc.nextLine().contains("n")) {
+            step_next();
+        }
+        sc.close();
     }
 
     public void initAll() {
+        addWQ.clear();
+        mulWQ.clear();
+        lsWQ.clear();
         initReserveStation();
         String insStr;
         insStr = readFile("test2.nel");
@@ -113,6 +124,7 @@ public class Tomasulo {
                             onJump = true;
                         }
                         addReserveStation[i].busy = true;
+                        addReserveStation[i].insId = instructionStates.size();
                         // init instruction state
                         InstructionState ins = new InstructionState();
                         ins.init(cur_order, cur_T);
@@ -134,6 +146,9 @@ public class Tomasulo {
                                 addReserveStation[i].vk_ok = false;
                                 addReserveStation[i].vk = F_state[ins.src2];
                             }
+                        else {
+                            addReserveStation[i].vk_ok = true;
+                        }
                         // update dst register state
                         F_state[ins.dst] = addReserveStation[i].id;
                         break;
@@ -145,6 +160,7 @@ public class Tomasulo {
                     if (!mulReserveStation[i].busy) {
                         canSend = true;
                         mulReserveStation[i].busy = true;
+                        mulReserveStation[i].insId = instructionStates.size();
                         // init instruction state
                         InstructionState ins = new InstructionState();
                         ins.init(cur_order, cur_T);
@@ -175,6 +191,7 @@ public class Tomasulo {
                     if (!lsReserveStation[i].busy) {
                         canSend = true;
                         lsReserveStation[i].busy = true;
+                        lsReserveStation[i].insId = instructionStates.size();
                         // init instruction state
                         InstructionState ins = new InstructionState();
                         ins.init(cur_order, cur_T);
@@ -187,8 +204,97 @@ public class Tomasulo {
                 }
             }
         }
+        // modify pc
         if (canSend)
             pc++;
+
+        /*---------------------------------*/
+        /*----------- excute --------------*/
+        /*---------------------------------*/
+        // for add
+        for (int i = 0; i < ADD_STATION_NUM; i++) {
+            // not empty
+            if (!addReserveStation[i].busy)
+                continue;
+            // not the one just issued
+            if (instructionStates.get(addReserveStation[i].insId).issue == cur_T)
+                continue;
+            // ready but not excuting
+            if (instructionStates.get(addReserveStation[i].insId).state == InstructionState.ISSUE) {
+                if (addReserveStation[i].vj_ok && addReserveStation[i].vk_ok) {
+                    instructionStates.get(addReserveStation[i].insId).state = InstructionState.READY;
+                    instructionStates.get(addReserveStation[i].insId).ready_turn = cur_T;
+                    addWQ.offer(i);
+                }
+            } else if (instructionStates.get(addReserveStation[i].insId).state == InstructionState.EXECUTE) {
+                instructionStates.get(addReserveStation[i].insId).exec_timer -= 1;
+                if (instructionStates.get(addReserveStation[i].insId).exec_timer == 0) {
+                    instructionStates.get(addReserveStation[i].insId).state = InstructionState.WB;
+                    instructionStates.get(addReserveStation[i].insId).exec_comp = cur_T;
+                }
+            }
+        }
+        while (empty_adder > 0 && addWQ.size() > 0) {
+            empty_adder--;
+            int i = addWQ.poll();
+            instructionStates.get(addReserveStation[i].insId).state = InstructionState.EXECUTE;
+        }
+
+        // for mul
+        for (int i = 0; i < MUL_STATION_NUM; i++) {
+            // not empty
+            if (!mulReserveStation[i].busy)
+                continue;
+            // not the one just issued
+            if (instructionStates.get(mulReserveStation[i].insId).issue == cur_T)
+                continue;
+            // ready but not excuting
+            if (instructionStates.get(mulReserveStation[i].insId).state == InstructionState.ISSUE) {
+                if (mulReserveStation[i].vj_ok && mulReserveStation[i].vk_ok) {
+                    instructionStates.get(mulReserveStation[i].insId).state = InstructionState.READY;
+                    instructionStates.get(mulReserveStation[i].insId).ready_turn = cur_T;
+                    mulWQ.offer(i);
+                }
+            } else if (instructionStates.get(mulReserveStation[i].insId).state == InstructionState.EXECUTE) {
+                instructionStates.get(mulReserveStation[i].insId).exec_timer -= 1;
+                if (instructionStates.get(mulReserveStation[i].insId).exec_timer == 0) {
+                    instructionStates.get(mulReserveStation[i].insId).state = InstructionState.WB;
+                    instructionStates.get(mulReserveStation[i].insId).exec_comp = cur_T;
+                }
+            }
+        }
+        while (empty_mult > 0 && mulWQ.size() > 0) {
+            empty_mult--;
+            int i = mulWQ.poll();
+            instructionStates.get(mulReserveStation[i].insId).state = InstructionState.EXECUTE;
+        }
+
+        // for L/S
+        for (int i = 0; i < LS_STATION_NUM; i++) {
+            // not empty
+            if (!lsReserveStation[i].busy)
+                continue;
+            // not the one just issued
+            if (instructionStates.get(lsReserveStation[i].insId).issue == cur_T)
+                continue;
+            // ready but not excuting
+            if (instructionStates.get(lsReserveStation[i].insId).state == InstructionState.ISSUE) {
+                instructionStates.get(lsReserveStation[i].insId).state = InstructionState.READY;
+                instructionStates.get(lsReserveStation[i].insId).ready_turn = cur_T;
+                lsWQ.offer(i);
+            } else if (instructionStates.get(lsReserveStation[i].insId).state == InstructionState.EXECUTE) {
+                instructionStates.get(lsReserveStation[i].insId).exec_timer -= 1;
+                if (instructionStates.get(lsReserveStation[i].insId).exec_timer == 0) {
+                    instructionStates.get(lsReserveStation[i].insId).state = InstructionState.WB;
+                    instructionStates.get(lsReserveStation[i].insId).exec_comp = cur_T;
+                }
+            }
+        }
+        while (empty_load > 0 && lsWQ.size() > 0) {
+            empty_load--;
+            int i = lsWQ.poll();
+            instructionStates.get(lsReserveStation[i].insId).state = InstructionState.EXECUTE;
+        }
         printStatus();
         return true;
     }
