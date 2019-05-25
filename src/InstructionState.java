@@ -1,5 +1,5 @@
 public class InstructionState {
-    private String ins;
+    public String ins;
     // state defines
     public final static int ISSUE = 1001;
     public final static int READY = 1005;
@@ -54,7 +54,7 @@ public class InstructionState {
         return (int) foo;
     }
 
-    public void init(String ins, int no) {
+    public void init(String ins, int no, int o) {
         this.ins = ins;
         issue = Tomasulo.cur_T;
         state = ISSUE;
@@ -64,7 +64,7 @@ public class InstructionState {
         src2 = -1;
         dst = -1;
         ready_turn = -1;
-        order = no;
+        order = o;
         String temp[] = ins.split(",");
         if (temp[0].contains("ADD")) {
             exec_timer = Tomasulo.T_ADD;
