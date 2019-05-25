@@ -5,6 +5,7 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumn;
 import java.awt.*;
+import java.awt.event.*;
 
 public class Tomasulo {
     // op
@@ -42,6 +43,7 @@ public class Tomasulo {
     public static int ADDER = 3;
     public static int MULT = 2;
     public static int LOAD = 2;
+    boolean notOver = false;
 
     // hardware
     public CalculateStation[] addReserveStation;
@@ -64,19 +66,24 @@ public class Tomasulo {
     public int[] F_state = new int[32];
     boolean onJump;
 
+    // ui
+    TomasuloUi ui;
+
     public Tomasulo() {
         // init
+        ui = new TomasuloUi();
         initAll();
-        Scanner sc = new Scanner(System.in);
-        while (step_next()) {
-            if (cur_T % 10 == 0) {
-                sc.nextLine();
-            }
-        }
-        sc.close();
+        // Scanner sc = new Scanner(System.in);
+        // while (step_next()) {
+        // if (cur_T % 10 == 0) {
+        // sc.nextLine();
+        // }
+        // }
+        // sc.close();
     }
 
     public void initAll() {
+        notOver = true;
         addWQ.clear();
         mulWQ.clear();
         lsWQ.clear();
@@ -106,6 +113,8 @@ public class Tomasulo {
     }
 
     public boolean step_next() {
+        if (!notOver)
+            return false;
         // issue
         cur_T++;
         System.out.println("current T: " + String.valueOf(cur_T));
@@ -242,8 +251,15 @@ public class Tomasulo {
                     // get result
                     if (addReserveStation[i].op == OP_ADD) {
                         addReserveStation[i].result = addReserveStation[i].qj + addReserveStation[i].qk;
-                    } else {
+                    } else if (addReserveStation[i].op == OP_SUB) {
                         addReserveStation[i].result = addReserveStation[i].qj - addReserveStation[i].qk;
+                    } else if (addReserveStation[i].op == OP_JUMP) {
+                        int cmp = instructionStates.get(addReserveStation[i].insId).dst;
+                        int v = addReserveStation[i].qj;
+                        if (cmp == v) {
+                            pc += instructionStates.get(addReserveStation[i].insId).src2;
+                        }
+                        onJump = false;
                     }
                 }
             }
@@ -421,8 +437,8 @@ public class Tomasulo {
 
         printStatus();
         // check if all the instructions have finished
-        boolean notOver = false;
         if (pc >= instructions.size()) {
+            notOver = false;
             for (int i = 0; i < instructionStates.size(); i++) {
                 if (instructionStates.get(i).state != InstructionState.FINISHED) {
                     notOver = true;
@@ -471,7 +487,7 @@ public class Tomasulo {
             }
         }
 
-        for (int i = 0; i < 31; i++) {
+        for (int i = 0; i < 32; i++) {
             if (F_state[i] == rsId) {
                 F[i] = res;
                 F_state[i] = -1;
@@ -488,7 +504,7 @@ public class Tomasulo {
         String tmp1 = "";
         String tmp2 = "";
         System.out.println("register status");
-        for (int i = 0; i < 31; i++) {
+        for (int i = 0; i < 32; i++) {
             tmp += "F" + i + "\t";
             tmp1 += F[i] + "\t";
             tmp2 += F_state[i] + "\t";
@@ -565,33 +581,159 @@ public class Tomasulo {
         new Tomasulo();
     }
 
-    public class Ui {
+    public class TomasuloUi {
+        // JPanel panel;
         JFrame jf;
-        JPanel panel;
-        BoxLayout layout;
+        // BoxLayout layout;
+        // JPanel panelContainer;
 
         JTable instructionTable;
 
         String[] instructionTableColumnName = { "order", "instruction", "ISSUE", "EXEC_COPM", "WB", "Status" };
         String[][] instructionTableData;
 
-        public Ui() {
+        JLabel currentTurnLabel;
+
+        JButton stepButton;
+        JTextField stepText;
+        JButton goButton;
+        JButton stopButton;
+        JButton quitButton;
+        JButton restartButton;
+
+        boolean notPause = true;
+
+        public TomasuloUi() {
             jf = new JFrame("Tomasulo");
-            panel = new JPanel();
+            initUi();
+        }
+
+        public void updateInstructionTable() {
+            int insSize = instructionStates.size();
+            int start = 0;
+            if (insSize > 10) {
+                start = insSize - 10;
+            }
+            for (int i = start; i < insSize; i++) {
+                // instructionTable[i+1]
+            }
         }
 
         public void initUi() {
-            layout = new BoxLayout(panel, BoxLayout.Y_AXIS);
-            panel.setLayout(layout);
-            instructionTableData = new String[10][6];
-            for (int i = 0; i < 10; i++) {
-                for (int j = 0; j < 6; j++) {
+            currentTurnLabel = new JLabel("current turn: 0");
+            currentTurnLabel.setBounds(200, 10, 200, 40);
+            instructionTableData = new String[11][7];
+            instructionTableData[0] = instructionTableColumnName;
+            for (int i = 1; i < 11; i++) {
+                for (int j = 0; j < 7; j++) {
                     instructionTableData[i][j] = "";
                 }
             }
             instructionTable = new JTable(new DefaultTableModel(instructionTableData, instructionTableColumnName));
-            panel.add(Box.createVerticalStrut(10));
-            panel.add(instructionTable);
+            instructionTable.setBounds(10, 50, 500, 176);
+            instructionTable.setEnabled(false);
+            stepButton = new JButton("step");
+            stepButton.setBounds(520, 50, 90, 30);
+            stepButton.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    int s = Integer.parseInt(stepText.getText());
+                    stepText.setEnabled(false);
+                    stepButton.setEnabled(false);
+                    stopButton.setEnabled(false);
+                    goButton.setEnabled(false);
+                    restartButton.setEnabled(false);
+                    for (int i = 0; i < s; i++) {
+                        if (!step_next()) {
+                            break;
+                        }
+                        currentTurnLabel.setText("current Turn:" + String.valueOf(cur_T));
+                    }
+                    stepText.setEnabled(true);
+                    stepButton.setEnabled(true);
+                    stopButton.setEnabled(true);
+                    goButton.setEnabled(true);
+                    restartButton.setEnabled(true);
+                }
+            });
+            stepText = new JTextField("1");
+            stepText.setBounds(610, 50, 40, 30);
+
+            goButton = new JButton("run");
+            goButton.setBounds(520, 85, 90, 30);
+            goButton.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    stepText.setEnabled(false);
+                    stepButton.setEnabled(false);
+                    // stopButton.setEnabled(false);
+                    goButton.setEnabled(false);
+                    restartButton.setEnabled(false);
+                    Thread t = new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            while (notPause) {
+                                if (!step_next()) {
+                                    currentTurnLabel.setText("current Turn:" + String.valueOf(cur_T));
+                                    break;
+                                }
+                            }
+                            notPause = true;
+                            stepText.setEnabled(true);
+                            stepButton.setEnabled(true);
+                            stopButton.setEnabled(true);
+                            goButton.setEnabled(true);
+                            restartButton.setEnabled(true);
+                        }
+                    });
+                    t.start();
+
+                }
+            });
+            stopButton = new JButton("stop");
+            stopButton.setBounds(520, 120, 90, 30);
+            stopButton.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    notPause = false;
+                }
+            });
+            restartButton = new JButton("clear");
+            restartButton.setBounds(520, 155, 90, 30);
+            restartButton.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    initAll();
+                    currentTurnLabel.setText("current Turn:" + String.valueOf(cur_T));
+                    jf.remove(instructionTable);
+                    instructionTable = new JTable(
+                            new DefaultTableModel(instructionTableData, instructionTableColumnName));
+                    instructionTable.setBounds(10, 50, 500, 176);
+                    instructionTable.setEnabled(false);
+                    jf.add(instructionTable);
+                }
+            });
+            quitButton = new JButton("quit");
+            quitButton.setBounds(520, 190, 90, 30);
+            quitButton.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    System.exit(0);
+                }
+            });
+            jf.setSize(new Dimension(800, 500));
+            jf.add(instructionTable);
+            jf.add(stopButton);
+            jf.add(quitButton);
+            jf.add(goButton);
+            jf.add(stepText);
+            jf.add(restartButton);
+            jf.add(stepButton);
+            jf.add(currentTurnLabel);
+            jf.setBackground(Color.white);
+            jf.setLayout(null);
+            jf.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            jf.setVisible(true);
         }
     }
 }
