@@ -1,4 +1,5 @@
 public class InstructionState {
+    private String ins;
     // state defines
     public final static int ISSUE = 1001;
     public final static int READY = 1005;
@@ -29,9 +30,8 @@ public class InstructionState {
     }
 
     public void printStatus() {
-        String tt = String.valueOf(dst) + "," + String.valueOf(src1) + "," + String.valueOf(src2);
-        String t = String.valueOf(order) + " " + Tomasulo.INSKEY[op] + tt + " ISSUE:" + issue + "\tEXEC_COMP:"
-                + exec_comp + "\tWB:" + wb;
+        String t = String.valueOf(order) + "\t\t" + this.ins + "\tISSUE:" + issue + "\tEXEC_COMP:" + exec_comp + "\tWB:"
+                + wb;
         String ttt = "";
         if (state == ISSUE)
             ttt = "ISSUE";
@@ -55,6 +55,7 @@ public class InstructionState {
     }
 
     public void init(String ins, int no) {
+        this.ins = ins;
         issue = Tomasulo.cur_T;
         state = ISSUE;
         exec_comp = -1;
@@ -108,6 +109,7 @@ public class InstructionState {
             dst = Integer.parseInt(t);
             t = temp[2].substring(2);
             src1 = hex2int(t);
+            this.ins = "LD," + temp[1] + "," + src1;
         } else if (temp[0].contains("JUMP")) {
             exec_timer = Tomasulo.T_JUMP;
             op = Tomasulo.OP_JUMP;
@@ -117,6 +119,7 @@ public class InstructionState {
             src1 = Integer.parseInt(t);
             t = temp[3].substring(2);
             src2 = hex2int(t);
+            this.ins = "JUMP," + temp[1] + "," + src1 + "," + src2;
         }
     }
 }

@@ -1,4 +1,6 @@
 public class LSStation {
+    int op;
+
     int id;
     int insId = -1;
     boolean busy;
