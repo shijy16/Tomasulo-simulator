@@ -4,6 +4,7 @@ import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableColumn;
+import javax.swing.text.DefaultStyledDocument.ElementSpec;
 import java.awt.*;
 import java.awt.event.*;
 
@@ -89,15 +90,16 @@ public class Tomasulo {
         lsWQ.clear();
         initReserveStation();
         String insStr;
-        insStr = readFile("test2.nel");
+        insStr = readFile("test.nel");
         initRegister();
         initMemory();
         initInsSet(insStr);
         empty_adder = ADDER;
         empty_mult = MULT;
         empty_load = LOAD;
+        instructionStates.clear();
         pc = 0;
-        cur_T = -1;
+        cur_T = 0;
         onJump = false;
     }
 
@@ -144,7 +146,7 @@ public class Tomasulo {
                         addReserveStation[i].insId = instructionStates.size();
                         // init instruction state
                         InstructionState ins = new InstructionState();
-                        ins.init(cur_order, cur_T);
+                        ins.init(cur_order, cur_T, pc);
                         instructionStates.add(ins);
                         // set reserveStation
                         addReserveStation[i].op = ins.op;
@@ -165,6 +167,7 @@ public class Tomasulo {
                             }
                         else {
                             addReserveStation[i].vk_ok = true;
+                            addReserveStation[i].qk = ins.src2;
                         }
                         // update dst register state
                         F_state[ins.dst] = addReserveStation[i].id;
@@ -173,14 +176,14 @@ public class Tomasulo {
                     }
                 }
             } else if (curOp == OP_MUL || curOp == OP_DIV) {
-                for (int i = 0; i < ADD_STATION_NUM; i++) {
+                for (int i = 0; i < MUL_STATION_NUM; i++) {
                     if (!mulReserveStation[i].busy) {
                         canSend = true;
                         mulReserveStation[i].busy = true;
                         mulReserveStation[i].insId = instructionStates.size();
                         // init instruction state
                         InstructionState ins = new InstructionState();
-                        ins.init(cur_order, cur_T);
+                        ins.init(cur_order, cur_T, pc);
                         instructionStates.add(ins);
                         // set reserveStation
                         mulReserveStation[i].op = ins.op;
@@ -211,7 +214,7 @@ public class Tomasulo {
                         lsReserveStation[i].insId = instructionStates.size();
                         // init instruction state
                         InstructionState ins = new InstructionState();
-                        ins.init(cur_order, cur_T);
+                        ins.init(cur_order, cur_T, pc);
                         instructionStates.add(ins);
                         // set reserveStation
                         addReserveStation[i].op = ins.op;
@@ -266,11 +269,11 @@ public class Tomasulo {
         }
         // dequque and excute
         while (empty_adder > 0 && addWQ.size() > 0) {
-            empty_adder--;
             int i = addWQ.poll();
-            instructionStates.get(addReserveStation[i].insId).state = InstructionState.EXECUTE;
             // the one who just issued should excute next turn.Others can start this turn
             if (instructionStates.get(addReserveStation[i].insId).issue != cur_T) {
+                empty_adder--;
+                instructionStates.get(addReserveStation[i].insId).state = InstructionState.EXECUTE;
                 instructionStates.get(addReserveStation[i].insId).exec_timer -= 1;
                 if (instructionStates.get(addReserveStation[i].insId).exec_timer == 0) {
                     instructionStates.get(addReserveStation[i].insId).state = InstructionState.WB;
@@ -278,10 +281,21 @@ public class Tomasulo {
                     // get result
                     if (addReserveStation[i].op == OP_ADD) {
                         addReserveStation[i].result = addReserveStation[i].qj + addReserveStation[i].qk;
-                    } else {
+                    } else if (addReserveStation[i].op == OP_SUB) {
                         addReserveStation[i].result = addReserveStation[i].qj - addReserveStation[i].qk;
+                    } else if (addReserveStation[i].op == OP_JUMP) {
+                        int cmp = instructionStates.get(addReserveStation[i].insId).dst;
+                        int v = addReserveStation[i].qj;
+                        System.out.println("??????????" + cmp + "," + v);
+                        if (cmp == v) {
+                            pc += instructionStates.get(addReserveStation[i].insId).src2;
+                        }
+                        onJump = false;
                     }
                 }
+            } else {
+                addWQ.offer(i);
+                break;
             }
         }
 
@@ -311,7 +325,7 @@ public class Tomasulo {
                     } else {
                         // just a temporary solution
                         if (mulReserveStation[i].qk == 0)
-                            mulReserveStation[i].result = F[instructionStates.get(mulReserveStation[i].insId).dst];
+                            mulReserveStation[i].result = mulReserveStation[i].qj;
                         else
                             mulReserveStation[i].result = mulReserveStation[i].qj / mulReserveStation[i].qk;
                     }
@@ -320,11 +334,13 @@ public class Tomasulo {
         }
         // dequque and excute
         while (empty_mult > 0 && mulWQ.size() > 0) {
-            empty_mult--;
             int i = mulWQ.poll();
-            instructionStates.get(mulReserveStation[i].insId).state = InstructionState.EXECUTE;
+            // instructionStates.get(mulReserveStation[i].insId).state =
+            // InstructionState.EXECUTE;
             // the one who just issued should excute next turn.Others can start this turn
             if (instructionStates.get(mulReserveStation[i].insId).issue != cur_T) {
+                empty_mult--;
+                instructionStates.get(mulReserveStation[i].insId).state = InstructionState.EXECUTE;
                 instructionStates.get(mulReserveStation[i].insId).exec_timer -= 1;
                 if (instructionStates.get(mulReserveStation[i].insId).exec_timer == 0) {
                     instructionStates.get(mulReserveStation[i].insId).state = InstructionState.WB;
@@ -340,6 +356,9 @@ public class Tomasulo {
                             mulReserveStation[i].result = mulReserveStation[i].qj / mulReserveStation[i].qk;
                     }
                 }
+            } else {
+                mulWQ.offer(i);
+                break;
             }
         }
 
@@ -372,11 +391,13 @@ public class Tomasulo {
         }
         // dequque and excute
         while (empty_load > 0 && lsWQ.size() > 0) {
-            empty_load--;
             int i = lsWQ.poll();
-            instructionStates.get(lsReserveStation[i].insId).state = InstructionState.EXECUTE;
+            // instructionStates.get(lsReserveStation[i].insId).state =
+            // InstructionState.EXECUTE;
             // the one who just issued should excute next turn.Others can start this turn
             if (instructionStates.get(lsReserveStation[i].insId).issue != cur_T) {
+                empty_load--;
+                instructionStates.get(lsReserveStation[i].insId).state = InstructionState.EXECUTE;
                 instructionStates.get(lsReserveStation[i].insId).exec_timer -= 1;
                 if (instructionStates.get(lsReserveStation[i].insId).exec_timer == 0) {
                     instructionStates.get(lsReserveStation[i].insId).state = InstructionState.WB;
@@ -388,6 +409,9 @@ public class Tomasulo {
                         memory[lsReserveStation[i].addr] = lsReserveStation[i].result;
                     }
                 }
+            } else {
+                lsWQ.offer(i);
+                break;
             }
         }
 
@@ -437,6 +461,7 @@ public class Tomasulo {
 
         printStatus();
         // check if all the instructions have finished
+        System.out.println(pc);
         if (pc >= instructions.size()) {
             notOver = false;
             for (int i = 0; i < instructionStates.size(); i++) {
@@ -567,6 +592,7 @@ public class Tomasulo {
 
     public void initInsSet(String insStr) {
         String[] t = insStr.split("\n");
+        instructions.clear();
         for (int i = 0; i < t.length; i++) {
             for (int j = 0; j < INSKEY.length; j++) {
                 if (t[i].contains(INSKEY[j])) {
@@ -582,13 +608,9 @@ public class Tomasulo {
     }
 
     public class TomasuloUi {
-        // JPanel panel;
         JFrame jf;
-        // BoxLayout layout;
-        // JPanel panelContainer;
 
         JTable instructionTable;
-
         String[] instructionTableColumnName = { "order", "instruction", "ISSUE", "EXEC_COPM", "WB", "Status" };
         String[][] instructionTableData;
 
@@ -605,7 +627,13 @@ public class Tomasulo {
 
         public TomasuloUi() {
             jf = new JFrame("Tomasulo");
+
             initUi();
+        }
+
+        public void updateUi() {
+            updateInstructionTable();
+            jf.validate();
         }
 
         public void updateInstructionTable() {
@@ -615,13 +643,39 @@ public class Tomasulo {
                 start = insSize - 10;
             }
             for (int i = start; i < insSize; i++) {
-                // instructionTable[i+1]
+                instructionTableData[i - start + 1][0] = String.valueOf(instructionStates.get(i).order);
+                instructionTableData[i - start + 1][1] = String.valueOf(instructionStates.get(i).ins);
+                instructionTableData[i - start + 1][2] = String.valueOf(instructionStates.get(i).issue);
+                instructionTableData[i - start + 1][3] = String.valueOf(instructionStates.get(i).exec_comp);
+                instructionTableData[i - start + 1][4] = String.valueOf(instructionStates.get(i).wb);
+                for (int j = 2; j < 5; j++) {
+                    if (instructionTableData[i - start + 1][j].contains("-")) {
+                        instructionTableData[i - start + 1][j] = "";
+                    }
+                }
+                int state = instructionStates.get(i).state;
+                String ttt = "";
+                if (state == InstructionState.ISSUE)
+                    ttt = "ISSUE";
+                else if (state == InstructionState.READY)
+                    ttt = "ISSUE";
+                else if (state == InstructionState.EXECUTE)
+                    ttt = "EXEC";
+                else if (state == InstructionState.WB)
+                    ttt = "WB";
+                else if (state == InstructionState.FINISHED)
+                    ttt = "FINISHED";
+                instructionTableData[i - start + 1][5] = ttt;
             }
+            jf.remove(instructionTable);
+            instructionTable = new JTable(new DefaultTableModel(instructionTableData, instructionTableColumnName));
+            instructionTable.setBounds(10, 50, 500, 176);
+            instructionTable.setPreferredSize(new Dimension(500, 176));
+            instructionTable.setEnabled(false);
+            jf.add(instructionTable);
         }
 
-        public void initUi() {
-            currentTurnLabel = new JLabel("current turn: 0");
-            currentTurnLabel.setBounds(200, 10, 200, 40);
+        public void initData() {
             instructionTableData = new String[11][7];
             instructionTableData[0] = instructionTableColumnName;
             for (int i = 1; i < 11; i++) {
@@ -629,6 +683,12 @@ public class Tomasulo {
                     instructionTableData[i][j] = "";
                 }
             }
+        }
+
+        public void initUi() {
+            initData();
+            currentTurnLabel = new JLabel("current turn: 0");
+            currentTurnLabel.setBounds(200, 10, 200, 40);
             instructionTable = new JTable(new DefaultTableModel(instructionTableData, instructionTableColumnName));
             instructionTable.setBounds(10, 50, 500, 176);
             instructionTable.setEnabled(false);
@@ -649,6 +709,7 @@ public class Tomasulo {
                         }
                         currentTurnLabel.setText("current Turn:" + String.valueOf(cur_T));
                     }
+                    updateUi();
                     stepText.setEnabled(true);
                     stepButton.setEnabled(true);
                     stopButton.setEnabled(true);
@@ -673,11 +734,17 @@ public class Tomasulo {
                         @Override
                         public void run() {
                             while (notPause) {
-                                if (!step_next()) {
+                                boolean c = step_next();
+                                if (cur_T % 10 == 0) {
                                     currentTurnLabel.setText("current Turn:" + String.valueOf(cur_T));
+                                    updateUi();
+                                }
+                                if (!c) {
                                     break;
                                 }
                             }
+                            currentTurnLabel.setText("current Turn:" + String.valueOf(cur_T));
+                            updateUi();
                             notPause = true;
                             stepText.setEnabled(true);
                             stepButton.setEnabled(true);
@@ -704,11 +771,13 @@ public class Tomasulo {
                 @Override
                 public void actionPerformed(ActionEvent e) {
                     initAll();
+                    initData();
                     currentTurnLabel.setText("current Turn:" + String.valueOf(cur_T));
                     jf.remove(instructionTable);
                     instructionTable = new JTable(
                             new DefaultTableModel(instructionTableData, instructionTableColumnName));
                     instructionTable.setBounds(10, 50, 500, 176);
+                    instructionTable.setPreferredSize(new Dimension(500, 176));
                     instructionTable.setEnabled(false);
                     jf.add(instructionTable);
                 }
@@ -722,6 +791,7 @@ public class Tomasulo {
                 }
             });
             jf.setSize(new Dimension(800, 500));
+            instructionTable.setPreferredSize(new Dimension(500, 176));
             jf.add(instructionTable);
             jf.add(stopButton);
             jf.add(quitButton);
