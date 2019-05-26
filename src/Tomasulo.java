@@ -72,8 +72,8 @@ public class Tomasulo {
 
     public Tomasulo() {
         // init
-        ui = new TomasuloUi();
         initAll();
+        ui = new TomasuloUi();
         // Scanner sc = new Scanner(System.in);
         // while (step_next()) {
         // if (cur_T % 10 == 0) {
@@ -217,7 +217,7 @@ public class Tomasulo {
                         ins.init(cur_order, cur_T, pc);
                         instructionStates.add(ins);
                         // set reserveStation
-                        addReserveStation[i].op = ins.op;
+                        lsReserveStation[i].op = ins.op;
                         lsReserveStation[i].addr = ins.src1;
                         F_state[ins.dst] = lsReserveStation[i].id;
                         break;
@@ -286,7 +286,6 @@ public class Tomasulo {
                     } else if (addReserveStation[i].op == OP_JUMP) {
                         int cmp = instructionStates.get(addReserveStation[i].insId).dst;
                         int v = addReserveStation[i].qj;
-                        System.out.println("??????????" + cmp + "," + v);
                         if (cmp == v) {
                             pc += instructionStates.get(addReserveStation[i].insId).src2;
                         }
@@ -415,7 +414,9 @@ public class Tomasulo {
             }
         }
 
-        // write back
+        /*---------------------------------*/
+        /*----------- write back-----------*/
+        /*---------------------------------*/
         // for add
         for (int i = 0; i < ADD_STATION_NUM; i++) {
             if (!addReserveStation[i].busy)
@@ -562,7 +563,7 @@ public class Tomasulo {
         }
         lsReserveStation = new LSStation[LS_STATION_NUM];
         for (int i = 0; i < LS_STATION_NUM; i++) {
-            lsReserveStation[i] = new LSStation("mul" + i, id++);
+            lsReserveStation[i] = new LSStation("laod" + i, id++);
         }
     }
 
@@ -607,12 +608,21 @@ public class Tomasulo {
         new Tomasulo();
     }
 
+    // ui
     public class TomasuloUi {
         JFrame jf;
 
         JTable instructionTable;
-        String[] instructionTableColumnName = { "order", "instruction", "ISSUE", "EXEC_COPM", "WB", "Status" };
+        String[] instructionTableColumnName = { "addr", "instruction", "ISSUE", "EXEC_COPM", "WB", "Status" };
         String[][] instructionTableData;
+
+        JTable rsTable;
+        String[] rsTableColumnName = { "name", "id", "busy", "op", "Qj", "Qk", "Vj", "Vk" };
+        String[][] rsTableData;
+
+        JTable registerTable;
+        String[] registerTableColumnName;
+        String[][] registerTableData;
 
         JLabel currentTurnLabel;
 
@@ -633,7 +643,122 @@ public class Tomasulo {
 
         public void updateUi() {
             updateInstructionTable();
+            updateRsTable();
+            updateRegisterTable();
             jf.validate();
+        }
+
+        public String getStationName(int id) {
+            for (int i = 0; i < ADD_STATION_NUM; i++) {
+                if (addReserveStation[i].id == id) {
+                    return addReserveStation[i].name;
+                }
+            }
+            for (int i = 0; i < MUL_STATION_NUM; i++) {
+                if (mulReserveStation[i].id == id) {
+                    return mulReserveStation[i].name;
+                }
+            }
+            for (int i = 0; i < LS_STATION_NUM; i++) {
+                if (lsReserveStation[i].id == id) {
+                    System.out.println("lsReserveStation[i].id" + lsReserveStation[i].id);
+                    return lsReserveStation[i].name;
+                }
+            }
+            return "";
+        }
+
+        public void updateRegisterTable() {
+            registerTableData = new String[6][17];
+            registerTableData[0][0] = "";
+            registerTableData[1][0] = "v";
+            registerTableData[2][0] = "s";
+            registerTableData[3][0] = "";
+            registerTableData[4][0] = "v";
+            registerTableData[5][0] = "s";
+            for (int i = 0; i < 32; i++) {
+                if (i / 16 == 0) {
+                    registerTableData[0][i + 1] = "F" + String.valueOf(i);
+                    registerTableData[1][i + 1] = String.valueOf(F[i]);
+                    registerTableData[2][i + 1] = F_state[i] == -1 ? "" : getStationName(F_state[i]);
+                } else {
+                    registerTableData[3][i % 16 + 1] = "F" + String.valueOf(i);
+                    registerTableData[4][i % 16 + 1] = String.valueOf(F[i]);
+                    registerTableData[5][i % 16 + 1] = F_state[i] == -1 ? "" : getStationName(F_state[i]);
+                }
+            }
+            jf.remove(registerTable);
+            registerTable = new JTable(new DefaultTableModel(registerTableData, registerTableColumnName));
+            registerTable.setPreferredSize(new Dimension(750, 98));
+            registerTable.setBounds(10, 260 + 20 * (ADD_STATION_NUM + MUL_STATION_NUM), 750, 98);
+            registerTable.setEnabled(false);
+            jf.add(registerTable);
+        }
+
+        public void updateRsTable() {
+            rsTableData = new String[ADD_STATION_NUM + MUL_STATION_NUM + 1][8];
+            rsTableData[0] = rsTableColumnName;
+            for (int i = 1; i < ADD_STATION_NUM + MUL_STATION_NUM + 1; i++) {
+                if (i <= ADD_STATION_NUM) {
+                    rsTableData[i][0] = addReserveStation[i - 1].name;
+                    rsTableData[i][1] = String.valueOf(addReserveStation[i - 1].id);
+                    rsTableData[i][2] = "no";
+                    if (addReserveStation[i - 1].busy) {
+                        rsTableData[i][2] = "yes";
+                        rsTableData[i][3] = INSKEY[addReserveStation[i - 1].op];
+                        if (addReserveStation[i - 1].vj_ok) {
+                            rsTableData[i][4] = String.valueOf(addReserveStation[i - 1].qj);
+                            rsTableData[i][6] = "";
+                        } else {
+                            rsTableData[i][4] = "";
+                            rsTableData[i][6] = getStationName(addReserveStation[i - 1].vj);
+                        }
+                        if (addReserveStation[i - 1].vk_ok) {
+                            rsTableData[i][5] = String.valueOf(addReserveStation[i - 1].qk);
+                            rsTableData[i][7] = "";
+                        } else {
+                            rsTableData[i][5] = "";
+                            rsTableData[i][7] = getStationName(addReserveStation[i - 1].vk);
+                        }
+                    } else {
+                        for (int j = 3; j < 8; j++) {
+                            rsTableData[i][j] = "";
+                        }
+                    }
+                } else {
+                    rsTableData[i][0] = mulReserveStation[i - ADD_STATION_NUM - 1].name;
+                    rsTableData[i][1] = String.valueOf(mulReserveStation[i - ADD_STATION_NUM - 1].id);
+                    rsTableData[i][2] = "no";
+                    if (mulReserveStation[i - ADD_STATION_NUM - 1].busy) {
+                        rsTableData[i][2] = "yes";
+                        rsTableData[i][3] = INSKEY[mulReserveStation[i - ADD_STATION_NUM - 1].op];
+                        if (mulReserveStation[i - ADD_STATION_NUM - 1].vj_ok) {
+                            rsTableData[i][4] = String.valueOf(mulReserveStation[i - ADD_STATION_NUM - 1].qj);
+                            rsTableData[i][6] = "";
+                        } else {
+                            rsTableData[i][4] = "";
+                            rsTableData[i][6] = getStationName(mulReserveStation[i - ADD_STATION_NUM - 1].vj);
+                        }
+                        if (mulReserveStation[i - ADD_STATION_NUM - 1].vk_ok) {
+                            rsTableData[i][5] = String.valueOf(mulReserveStation[i - ADD_STATION_NUM - 1].qk);
+                            rsTableData[i][7] = "";
+                        } else {
+                            rsTableData[i][5] = "";
+                            rsTableData[i][7] = getStationName(mulReserveStation[i - ADD_STATION_NUM - 1].vk);
+                        }
+                    } else {
+                        for (int j = 3; j < 8; j++) {
+                            rsTableData[i][j] = "";
+                        }
+                    }
+                }
+            }
+            jf.remove(rsTable);
+            rsTable = new JTable(new DefaultTableModel(rsTableData, rsTableColumnName));
+            rsTable.setPreferredSize(new Dimension(500, 20 * (ADD_STATION_NUM + MUL_STATION_NUM)));
+            rsTable.setBounds(10, 250, 500, 20 * (ADD_STATION_NUM + MUL_STATION_NUM));
+            rsTable.setEnabled(false);
+            jf.add(rsTable);
         }
 
         public void updateInstructionTable() {
@@ -683,6 +808,45 @@ public class Tomasulo {
                     instructionTableData[i][j] = "";
                 }
             }
+
+            rsTableData = new String[ADD_STATION_NUM + MUL_STATION_NUM + 1][8];
+            rsTableData[0] = rsTableColumnName;
+            for (int i = 1; i < ADD_STATION_NUM + MUL_STATION_NUM + 1; i++) {
+                if (i <= ADD_STATION_NUM) {
+                    rsTableData[i][0] = addReserveStation[i - 1].name;
+                    rsTableData[i][1] = String.valueOf(addReserveStation[i - 1].id);
+                    rsTableData[i][2] = "no";
+                } else {
+                    rsTableData[i][0] = mulReserveStation[i - ADD_STATION_NUM - 1].name;
+                    rsTableData[i][1] = String.valueOf(mulReserveStation[i - ADD_STATION_NUM - 1].id);
+                    rsTableData[i][2] = "no";
+                }
+            }
+
+            registerTableColumnName = new String[17];
+            registerTableColumnName[0] = "";
+            for (int i = 1; i < 17; i++) {
+                registerTableColumnName[i] = String.valueOf(i - 1);
+            }
+            registerTableData = new String[6][17];
+            registerTableData[0][0] = "";
+            registerTableData[1][0] = "v";
+            registerTableData[2][0] = "s";
+            registerTableData[3][0] = "";
+            registerTableData[4][0] = "v";
+            registerTableData[5][0] = "s";
+            for (int i = 0; i < 32; i++) {
+                if (i / 16 == 0) {
+                    registerTableData[0][i + 1] = "F" + String.valueOf(i);
+                    registerTableData[1][i + 1] = String.valueOf(F[i]);
+                    registerTableData[2][i + 1] = F_state[i] == -1 ? "" : getStationName(F_state[i]);
+                } else {
+                    registerTableData[3][i % 16 + 1] = "F" + String.valueOf(i);
+                    registerTableData[4][i % 16 + 1] = String.valueOf(F[i]);
+                    registerTableData[5][i % 16 + 1] = F_state[i] == -1 ? "" : getStationName(F_state[i]);
+                }
+            }
+
         }
 
         public void initUi() {
@@ -692,6 +856,17 @@ public class Tomasulo {
             instructionTable = new JTable(new DefaultTableModel(instructionTableData, instructionTableColumnName));
             instructionTable.setBounds(10, 50, 500, 176);
             instructionTable.setEnabled(false);
+
+            rsTable = new JTable(new DefaultTableModel(rsTableData, rsTableColumnName));
+            rsTable.setPreferredSize(new Dimension(500, 20 * (ADD_STATION_NUM + MUL_STATION_NUM)));
+            rsTable.setBounds(10, 250, 500, 20 * (ADD_STATION_NUM + MUL_STATION_NUM));
+            rsTable.setEnabled(false);
+
+            registerTable = new JTable(new DefaultTableModel(registerTableData, registerTableColumnName));
+            registerTable.setPreferredSize(new Dimension(750, 98));
+            registerTable.setBounds(10, 260 + 20 * (ADD_STATION_NUM + MUL_STATION_NUM), 750, 98);
+            registerTable.setEnabled(false);
+
             stepButton = new JButton("step");
             stepButton.setBounds(520, 50, 90, 30);
             stepButton.addActionListener(new ActionListener() {
@@ -725,6 +900,7 @@ public class Tomasulo {
             goButton.addActionListener(new ActionListener() {
                 @Override
                 public void actionPerformed(ActionEvent e) {
+                    notPause = true;
                     stepText.setEnabled(false);
                     stepButton.setEnabled(false);
                     // stopButton.setEnabled(false);
@@ -772,14 +948,7 @@ public class Tomasulo {
                 public void actionPerformed(ActionEvent e) {
                     initAll();
                     initData();
-                    currentTurnLabel.setText("current Turn:" + String.valueOf(cur_T));
-                    jf.remove(instructionTable);
-                    instructionTable = new JTable(
-                            new DefaultTableModel(instructionTableData, instructionTableColumnName));
-                    instructionTable.setBounds(10, 50, 500, 176);
-                    instructionTable.setPreferredSize(new Dimension(500, 176));
-                    instructionTable.setEnabled(false);
-                    jf.add(instructionTable);
+                    updateUi();
                 }
             });
             quitButton = new JButton("quit");
@@ -793,6 +962,7 @@ public class Tomasulo {
             jf.setSize(new Dimension(800, 500));
             instructionTable.setPreferredSize(new Dimension(500, 176));
             jf.add(instructionTable);
+            jf.add(rsTable);
             jf.add(stopButton);
             jf.add(quitButton);
             jf.add(goButton);
@@ -800,6 +970,7 @@ public class Tomasulo {
             jf.add(restartButton);
             jf.add(stepButton);
             jf.add(currentTurnLabel);
+            jf.add(registerTable);
             jf.setBackground(Color.white);
             jf.setLayout(null);
             jf.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
