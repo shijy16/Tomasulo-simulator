@@ -46,7 +46,7 @@ public class InstructionState {
         System.out.println(t + "\t" + ttt);
     }
 
-    public int hex2int(String hex) {
+    public static int hex2int(String hex) {
         long foo = Long.parseLong(hex, 16);
         if (foo > 0x7fffffffL) {
             foo = -(0x100000000L - foo);
@@ -102,14 +102,14 @@ public class InstructionState {
             src1 = Integer.parseInt(t);
             t = temp[3].substring(1);
             src2 = Integer.parseInt(t);
-        } else if (temp[0].contains("LD")) {
-            exec_timer = Tomasulo.T_LD;
-            op = Tomasulo.OP_LD;
+        } else if (temp[0].contains("LDM")) {
+            exec_timer = Tomasulo.T_LDM;
+            op = Tomasulo.OP_LDM;
             String t = temp[1].substring(1);
             dst = Integer.parseInt(t);
             t = temp[2].substring(2);
             src1 = hex2int(t);
-            this.ins = "LD," + temp[1] + "," + src1;
+            this.ins = "LDM," + temp[1] + "," + src1;
         } else if (temp[0].contains("JUMP")) {
             exec_timer = Tomasulo.T_JUMP;
             op = Tomasulo.OP_JUMP;
@@ -119,7 +119,23 @@ public class InstructionState {
             src1 = Integer.parseInt(t);
             t = temp[3].substring(2);
             src2 = hex2int(t);
-            this.ins = "JUMP," + temp[1] + "," + src1 + "," + src2;
+            this.ins = "JUMP," + dst + "," + "F" + src1 + "," + src2;
+        } else if (temp[0].contains("ST")) {
+            exec_timer = Tomasulo.T_ST;
+            op = Tomasulo.OP_ST;
+            String t = temp[1].substring(1);
+            src1 = Integer.parseInt(t);
+            t = temp[2].substring(2);
+            dst = hex2int(t);
+            this.ins = "ST," + temp[1] + "," + dst;
+        } else if (temp[0].contains("LD")) {
+            exec_timer = Tomasulo.T_LD;
+            op = Tomasulo.OP_LD;
+            String t = temp[1].substring(1);
+            dst = Integer.parseInt(t);
+            t = temp[2].substring(2);
+            src1 = hex2int(t);
+            this.ins = "LD," + temp[1] + "," + src1;
         }
     }
 }

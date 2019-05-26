@@ -12,6 +12,10 @@ public class LSStation {
     // for L/S
     int addr;
 
+    boolean f_ok;
+    int q;
+    int v;
+
     public LSStation(String n, int t) {
         this.init(n, t);
     }
@@ -20,5 +24,8 @@ public class LSStation {
         busy = false;
         this.name = n;
         this.id = t;
+        f_ok = false;
+        q = -1;
+        v = -1;
     }
 }
