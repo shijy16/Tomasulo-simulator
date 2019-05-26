@@ -11,20 +11,22 @@ import java.awt.event.*;
 
 public class Tomasulo {
 
-    // just change the following 3 kinds of data if you like.
+    // just change the following file dir,reserve station num,function unit num if
+    // you like.
+    String file_dir = "../testcases/test0.nel";
     // excute time
     public static int T_ADD = 3;
     public static int T_SUB = 3;
-    public static int T_MUL = 4;
-    public static int T_DIV = 4;
+    public static int T_MUL = 12;
+    public static int T_DIV = 40;
     public static int T_LDM = 3;
     public static int T_JUMP = 1;
     public static int T_ST = 3;
     public static int T_LD = 3;
     // reserve station num
     public int LS_STATION_NUM = 3;
-    public int MUL_STATION_NUM = 2;
-    public int ADD_STATION_NUM = 3;
+    public int MUL_STATION_NUM = 3;
+    public int ADD_STATION_NUM = 6;
     public int LOAD_BUFFER_NUM = 3;
     // function unit num
     public static int ADDER = 3;
@@ -82,8 +84,6 @@ public class Tomasulo {
     // ui
     TomasuloUi ui;
 
-    String file_dir = "test2.nel";
-
     public Tomasulo() {
         // init
         initAll();
@@ -102,6 +102,7 @@ public class Tomasulo {
         addWQ.clear();
         mulWQ.clear();
         lsWQ.clear();
+        loadWQ.clear();
         initReserveStation();
         String insStr;
         insStr = readFile(file_dir);
@@ -478,9 +479,14 @@ public class Tomasulo {
                     instructionStates.get(lsReserveStation[i].insId).state = InstructionState.WB;
                     instructionStates.get(lsReserveStation[i].insId).exec_comp = cur_T;
                     // get result
-                    if (lsReserveStation[i].op == OP_LDM) {
+                    if (lsReserveStation[i].addr > 4095 || lsReserveStation[i].addr < 0) {
+                        if (lsReserveStation[i].op == OP_LDM) {
+                            lsReserveStation[i].result = 0;
+                        }
+                    } else if (lsReserveStation[i].op == OP_LDM) {
                         lsReserveStation[i].result = memory[lsReserveStation[i].addr];
                     } else {
+                        lsReserveStation[i].result = lsReserveStation[i].q;
                         memory[lsReserveStation[i].addr] = lsReserveStation[i].result;
                     }
                 }
@@ -500,9 +506,14 @@ public class Tomasulo {
                     instructionStates.get(lsReserveStation[i].insId).state = InstructionState.WB;
                     instructionStates.get(lsReserveStation[i].insId).exec_comp = cur_T;
                     // get result
-                    if (lsReserveStation[i].op == OP_LDM) {
+                    if (lsReserveStation[i].addr > 4095 || lsReserveStation[i].addr < 0) {
+                        if (lsReserveStation[i].op == OP_LDM) {
+                            lsReserveStation[i].result = 0;
+                        }
+                    } else if (lsReserveStation[i].op == OP_LDM) {
                         lsReserveStation[i].result = memory[lsReserveStation[i].addr];
                     } else {
+                        lsReserveStation[i].result = lsReserveStation[i].q;
                         memory[lsReserveStation[i].addr] = lsReserveStation[i].result;
                     }
                 }
@@ -561,7 +572,10 @@ public class Tomasulo {
                 if (instructionStates.get(addReserveStation[i].insId).exec_comp != cur_T) {
                     addReserveStation[i].busy = false;
                     empty_adder++;
-                    broadcast(addReserveStation[i].id, addReserveStation[i].result);
+                    if (addReserveStation[i].op != OP_JUMP) {
+                        F[instructionStates.get(addReserveStation[i].insId).dst] = addReserveStation[i].result;
+                        broadcast(addReserveStation[i].id, addReserveStation[i].result);
+                    }
                     instructionStates.get(addReserveStation[i].insId).state = InstructionState.FINISHED;
                     instructionStates.get(addReserveStation[i].insId).wb = cur_T;
                 }
@@ -573,6 +587,7 @@ public class Tomasulo {
                 continue;
             if (instructionStates.get(mulReserveStation[i].insId).state == InstructionState.WB) {
                 if (instructionStates.get(mulReserveStation[i].insId).exec_comp != cur_T) {
+                    F[instructionStates.get(mulReserveStation[i].insId).dst] = mulReserveStation[i].result;
                     mulReserveStation[i].busy = false;
                     empty_mult++;
                     broadcast(mulReserveStation[i].id, mulReserveStation[i].result);
@@ -591,8 +606,10 @@ public class Tomasulo {
                     empty_load++;
                     instructionStates.get(lsReserveStation[i].insId).state = InstructionState.FINISHED;
                     instructionStates.get(lsReserveStation[i].insId).wb = cur_T;
-                    if (lsReserveStation[i].op == OP_LDM)
+                    if (lsReserveStation[i].op == OP_LDM) {
                         broadcast(lsReserveStation[i].id, lsReserveStation[i].result);
+                        F[instructionStates.get(lsReserveStation[i].insId).dst] = lsReserveStation[i].result;
+                    }
                 }
             }
         }
@@ -604,6 +621,7 @@ public class Tomasulo {
                 if (instructionStates.get(loadBuffer[i].insId).exec_comp != cur_T) {
                     loadBuffer[i].busy = false;
                     empty_buffer++;
+                    F[instructionStates.get(loadBuffer[i].insId).dst] = loadBuffer[i].result;
                     broadcast(loadBuffer[i].id, loadBuffer[i].result);
                     instructionStates.get(loadBuffer[i].insId).state = InstructionState.FINISHED;
                     instructionStates.get(loadBuffer[i].insId).wb = cur_T;
@@ -695,9 +713,9 @@ public class Tomasulo {
         String tmp2 = "";
         System.out.println("register status");
         for (int i = 0; i < 32; i++) {
-            tmp += "F" + i + "\t";
-            tmp1 += F[i] + "\t";
-            tmp2 += F_state[i] + "\t";
+            tmp += "F" + i + " ";
+            tmp1 += F[i] + " ";
+            tmp2 += F_state[i] + " ";
         }
         System.out.println(tmp + "\n" + tmp1 + "\n" + tmp2);
     }
@@ -731,7 +749,7 @@ public class Tomasulo {
         }
         loadBuffer = new LSStation[LOAD_BUFFER_NUM];
         for (int i = 0; i < LOAD_BUFFER_NUM; i++) {
-            loadBuffer[i] = new LSStation("buff" + i, id++);
+            loadBuffer[i] = new LSStation("LB" + i, id++);
         }
     }
 
@@ -796,6 +814,10 @@ public class Tomasulo {
         String[] loadTableColumnName = { "name", "busy", "addr/value", "FU" };
         String[][] loadTableData;
 
+        JTable memoryTable;
+        String[] memoryTableColumnName = { "1", "2" };
+        String[][] memoryTableData;
+
         JLabel currentTurnLabel;
 
         JButton stepButton;
@@ -805,6 +827,10 @@ public class Tomasulo {
         JButton quitButton;
         JButton restartButton;
         JButton fileButton;
+        JButton searchButton;
+        JButton setButton;
+
+        String fileName = "test0.nel";
 
         boolean notPause = true;
 
@@ -819,7 +845,7 @@ public class Tomasulo {
             updateRsTable();
             updateRegisterTable();
             updateLoadTable();
-            currentTurnLabel.setText("current Turn:" + String.valueOf(cur_T));
+            currentTurnLabel.setText("Cycle :" + String.valueOf(cur_T) + "   " + fileName);
             jf.validate();
         }
 
@@ -836,8 +862,12 @@ public class Tomasulo {
             }
             for (int i = 0; i < LS_STATION_NUM; i++) {
                 if (lsReserveStation[i].id == id) {
-                    System.out.println("lsReserveStation[i].id" + lsReserveStation[i].id);
                     return lsReserveStation[i].name;
+                }
+            }
+            for (int i = 0; i < LOAD_BUFFER_NUM; i++) {
+                if (loadBuffer[i].id == id) {
+                    return loadBuffer[i].name;
                 }
             }
             return "";
@@ -865,7 +895,7 @@ public class Tomasulo {
             jf.remove(registerTable);
             registerTable = new JTable(new DefaultTableModel(registerTableData, registerTableColumnName));
             registerTable.setPreferredSize(new Dimension(750, 98));
-            registerTable.setBounds(10, 260 + (LS_STATION_NUM + LOAD_BUFFER_NUM) * 17 + 17, 750, 98);
+            registerTable.setBounds(10, 260 + 20 * (ADD_STATION_NUM + MUL_STATION_NUM), 750, 98);
             registerTable.setEnabled(false);
             jf.add(registerTable);
         }
@@ -975,6 +1005,52 @@ public class Tomasulo {
             jf.add(instructionTable);
         }
 
+        public void updateMemoryTable() {
+            int address = 0;
+            try {
+                address = Integer.parseInt(memoryTable.getValueAt(0, 1).toString());
+            } catch (Exception e) {
+                return;
+            }
+            memoryTableData[0][1] = String.valueOf(address);
+            if (address >= 4096 || address < 0) {
+                memoryTableData[1][1] = "address invalid";
+            } else {
+                memoryTableData[1][1] = String.valueOf(memory[address]);
+            }
+
+            jf.remove(memoryTable);
+            memoryTable = new JTable(new DefaultTableModel(memoryTableData, memoryTableColumnName));
+            memoryTable.setPreferredSize(new Dimension(200, 35));
+            memoryTable.setBounds(10, 260 + 20 * (ADD_STATION_NUM + MUL_STATION_NUM) + 120, 200, 35);
+            jf.add(memoryTable);
+        }
+
+        public void setMemory() {
+            int address = 0;
+            try {
+                address = Integer.parseInt(memoryTable.getValueAt(0, 1).toString());
+            } catch (Exception e) {
+                return;
+            }
+            int value = 0;
+            try {
+                value = Integer.parseInt(memoryTable.getValueAt(1, 1).toString());
+            } catch (Exception e) {
+                return;
+            }
+            if (address >= 4096 || address < 0) {
+                memoryTableData[1][1] = "address invalid";
+                jf.remove(memoryTable);
+                memoryTable = new JTable(new DefaultTableModel(memoryTableData, memoryTableColumnName));
+                memoryTable.setPreferredSize(new Dimension(200, 35));
+                memoryTable.setBounds(10, 260 + 20 * (ADD_STATION_NUM + MUL_STATION_NUM) + 120, 200, 35);
+                jf.add(memoryTable);
+            } else {
+                memory[address] = value;
+            }
+        }
+
         public void initData() {
             instructionTableData = new String[11][7];
             instructionTableData[0] = instructionTableColumnName;
@@ -1036,6 +1112,11 @@ public class Tomasulo {
                 loadTableData[i + 1][2] = "";
                 loadTableData[i + 1][3] = "";
             }
+
+            memoryTableData = new String[2][2];
+            memoryTableData[0][0] = "address";
+            memoryTableData[0][1] = memoryTableData[1][1] = "";
+            memoryTableData[1][0] = "value";
         }
 
         public void updateLoadTable() {
@@ -1085,7 +1166,7 @@ public class Tomasulo {
 
         public void initUi() {
             initData();
-            currentTurnLabel = new JLabel("current turn: 0");
+            currentTurnLabel = new JLabel(" Cycle : 0 " + fileName);
             currentTurnLabel.setBounds(200, 10, 200, 40);
 
             instructionTable = new JTable(new DefaultTableModel(instructionTableData, instructionTableColumnName));
@@ -1104,8 +1185,31 @@ public class Tomasulo {
 
             registerTable = new JTable(new DefaultTableModel(registerTableData, registerTableColumnName));
             registerTable.setPreferredSize(new Dimension(750, 98));
-            registerTable.setBounds(10, 260 + (LS_STATION_NUM + LOAD_BUFFER_NUM) * 17 + 17, 750, 98);
+            registerTable.setBounds(10, 260 + 20 * (ADD_STATION_NUM + MUL_STATION_NUM), 750, 98);
             registerTable.setEnabled(false);
+
+            memoryTable = new JTable(new DefaultTableModel(memoryTableData, memoryTableColumnName));
+            memoryTable.setPreferredSize(new Dimension(200, 35));
+            memoryTable.setBounds(10, 260 + 20 * (ADD_STATION_NUM + MUL_STATION_NUM) + 120, 200, 35);
+
+            searchButton = new JButton("find");
+            searchButton.setBounds(240, 260 + 20 * (ADD_STATION_NUM + MUL_STATION_NUM) + 120, 70, 15);
+            searchButton.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    updateMemoryTable();
+                    updateUi();
+                }
+            });
+            setButton = new JButton("set");
+            setButton.setBounds(240, 278 + 20 * (ADD_STATION_NUM + MUL_STATION_NUM) + 120, 70, 15);
+            setButton.addActionListener(new ActionListener() {
+                @Override
+                public void actionPerformed(ActionEvent e) {
+                    setMemory();
+                    updateUi();
+                }
+            });
 
             fileButton = new JButton("file...");
             fileButton.setBounds(10, 10, 100, 30);
@@ -1115,7 +1219,7 @@ public class Tomasulo {
                     int result = 0;
                     JFileChooser fileChooser = new JFileChooser();
                     try {
-                        fileChooser.setCurrentDirectory((new File("")).getCanonicalFile());
+                        fileChooser.setCurrentDirectory((new File("../testcases")));
                     } catch (Exception s) {
                         return;
                     }
@@ -1125,6 +1229,7 @@ public class Tomasulo {
                     result = fileChooser.showOpenDialog(jf);
                     if (JFileChooser.APPROVE_OPTION == result) {
                         file_dir = fileChooser.getSelectedFile().getPath();
+                        fileName = fileChooser.getSelectedFile().getName();
                     }
                     initAll();
                     initData();
@@ -1176,14 +1281,14 @@ public class Tomasulo {
                             while (notPause) {
                                 boolean c = step_next();
                                 if (cur_T % 10 == 0) {
-                                    currentTurnLabel.setText("current Turn:" + String.valueOf(cur_T));
+                                    currentTurnLabel.setText(" Cycle :" + String.valueOf(cur_T) + " " + fileName);
                                     updateUi();
                                 }
                                 if (!c) {
                                     break;
                                 }
                             }
-                            currentTurnLabel.setText("current Turn:" + String.valueOf(cur_T));
+                            currentTurnLabel.setText(" Cycle :" + String.valueOf(cur_T) + " " + fileName);
                             updateUi();
                             notPause = true;
                             stepText.setEnabled(true);
@@ -1223,20 +1328,26 @@ public class Tomasulo {
                     System.exit(0);
                 }
             });
-            jf.setSize(new Dimension(850, 600));
+            jf.setSize(new Dimension(850, 700));
             instructionTable.setPreferredSize(new Dimension(600, 176));
-            jf.add(fileButton);
+            jf.add(memoryTable);
             jf.add(loadTable);
             jf.add(instructionTable);
             jf.add(rsTable);
+            jf.add(registerTable);
+
+            jf.add(fileButton);
+            jf.add(setButton);
+            jf.add(searchButton);
             jf.add(stopButton);
             jf.add(quitButton);
             jf.add(goButton);
-            jf.add(stepText);
             jf.add(restartButton);
             jf.add(stepButton);
+
             jf.add(currentTurnLabel);
-            jf.add(registerTable);
+            jf.add(stepText);
+
             jf.setBackground(Color.white);
             jf.setLayout(null);
             jf.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
