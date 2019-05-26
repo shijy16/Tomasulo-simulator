@@ -6,7 +6,7 @@
 
 ![1558875778754](D:\code\Tomasulo-simulator\pic\1.png)
 
-## 二、 实验要求
+## 二、 完成的功能
 
 ##### 基础要求
 
@@ -21,6 +21,14 @@
 - [x] 丰富NEL 语言，为它添加更多的指令支持，并能够模拟这些指令的执行。
 
 ## 三、 实验设计
+
+### 设计思路
+
++ 用一个状态表来存储各个指令运行状态。
++ 用不同的类来实现运算类保留站和装载类保留站。
++ ISSUE阶段都从指令存储表中取出一条指令，检查对应保留站是否有空闲，若有，初始化指令状态和空闲保留站后放入状态表。
++ EXCUTE阶段检查每一个保留站是否可以执行/正在执行/执行完毕，用一个计时器控制执行周期，用等待队列控制执行顺序。
++ WB阶段写回对应寄存器并广播，释放对应保留站。
 
 ### 扩展指令内容
 
@@ -228,7 +236,37 @@ JUMP,0x0,F1,0xfffffffc
 
 结果和预期一致。
 
-## 五、 实验总结
+## 五、运行方式
+
+要修改保留站个数、指令执行周期、运算器个数，直接修改`Tomasulo.java`中：
+
+```java
+// excute time
+    public static int T_ADD = 3;
+    public static int T_SUB = 3;
+    public static int T_MUL = 12;
+    public static int T_DIV = 40;
+    public static int T_LDM = 3;
+    public static int T_JUMP = 1;
+    public static int T_ST = 3;
+    public static int T_LD = 3;
+    // reserve station num
+    public int LS_STATION_NUM = 3;
+    public int MUL_STATION_NUM = 3;
+    public int ADD_STATION_NUM = 6;
+    public int LOAD_BUFFER_NUM = 3;
+    // function unit num
+    public static int ADDER = 3;
+    public static int MULT = 2;
+    public static int LOAD = 2; // for memory load and store
+    public static int LOADER = 2; // for load
+```
+
+在src文件夹下直接运行`make run`来运行。
+
+默认打开的指令文件是`testcases/test0.nel`。
+
+## 六、 实验总结
 
 本次实验花的时间和精力较多，很多bug都是在写了ui之后写报告时做测试才找到的。这也是我第一次用软件实现硬件模拟器。
 
