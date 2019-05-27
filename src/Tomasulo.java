@@ -312,6 +312,7 @@ public class Tomasulo {
         /*----------- excute --------------*/
         /*---------------------------------*/
         // for add
+        int temp1 = 0;
         for (int i = 0; i < ADD_STATION_NUM; i++) {
             // not empty
             if (!addReserveStation[i].busy)
@@ -328,6 +329,7 @@ public class Tomasulo {
             else if (instructionStates.get(addReserveStation[i].insId).state == InstructionState.EXECUTE) {
                 instructionStates.get(addReserveStation[i].insId).exec_timer -= 1;
                 if (instructionStates.get(addReserveStation[i].insId).exec_timer == 0) {
+                    temp1++;
                     instructionStates.get(addReserveStation[i].insId).state = InstructionState.WB;
                     instructionStates.get(addReserveStation[i].insId).exec_comp = cur_T;
                     // get result
@@ -355,6 +357,7 @@ public class Tomasulo {
                 instructionStates.get(addReserveStation[i].insId).state = InstructionState.EXECUTE;
                 instructionStates.get(addReserveStation[i].insId).exec_timer -= 1;
                 if (instructionStates.get(addReserveStation[i].insId).exec_timer == 0) {
+                    temp1++;
                     instructionStates.get(addReserveStation[i].insId).state = InstructionState.WB;
                     instructionStates.get(addReserveStation[i].insId).exec_comp = cur_T;
                     // get result
@@ -376,8 +379,12 @@ public class Tomasulo {
                 break;
             }
         }
+        // the FU just finished this cycle,it can't be use in this cycle again.So add
+        // after while loop
+        empty_adder += temp1;
 
         // for mul
+        int temp2 = 0;
         for (int i = 0; i < MUL_STATION_NUM; i++) {
             // not empty
             if (!mulReserveStation[i].busy)
@@ -401,6 +408,7 @@ public class Tomasulo {
                     continue;
                 }
                 if (instructionStates.get(mulReserveStation[i].insId).exec_timer == 0) {
+                    temp2++;
                     instructionStates.get(mulReserveStation[i].insId).state = InstructionState.WB;
                     instructionStates.get(mulReserveStation[i].insId).exec_comp = cur_T;
                     // get result
@@ -433,6 +441,7 @@ public class Tomasulo {
                     continue;
                 }
                 if (instructionStates.get(mulReserveStation[i].insId).exec_timer == 0) {
+                    temp2++;
                     instructionStates.get(mulReserveStation[i].insId).state = InstructionState.WB;
                     instructionStates.get(mulReserveStation[i].insId).exec_comp = cur_T;
                     // get result
@@ -451,8 +460,10 @@ public class Tomasulo {
                 break;
             }
         }
+        empty_mult += temp2;
 
         // for L/S
+        int temp3 = 0;
         for (int i = 0; i < LS_STATION_NUM; i++) {
             // not empty
             if (!lsReserveStation[i].busy)
@@ -478,6 +489,7 @@ public class Tomasulo {
                 if (instructionStates.get(lsReserveStation[i].insId).exec_timer == 0) {
                     instructionStates.get(lsReserveStation[i].insId).state = InstructionState.WB;
                     instructionStates.get(lsReserveStation[i].insId).exec_comp = cur_T;
+                    temp3++;
                     // get result
                     if (lsReserveStation[i].addr > 4095 || lsReserveStation[i].addr < 0) {
                         if (lsReserveStation[i].op == OP_LDM) {
@@ -503,6 +515,7 @@ public class Tomasulo {
                 instructionStates.get(lsReserveStation[i].insId).state = InstructionState.EXECUTE;
                 instructionStates.get(lsReserveStation[i].insId).exec_timer -= 1;
                 if (instructionStates.get(lsReserveStation[i].insId).exec_timer == 0) {
+                    temp3++;
                     instructionStates.get(lsReserveStation[i].insId).state = InstructionState.WB;
                     instructionStates.get(lsReserveStation[i].insId).exec_comp = cur_T;
                     // get result
@@ -522,8 +535,10 @@ public class Tomasulo {
                 break;
             }
         }
+        empty_load += temp3;
 
         // for load
+        int temp4 = 0;
         for (int i = 0; i < LOAD_BUFFER_NUM; i++) {
             // not empty
             if (!loadBuffer[i].busy)
@@ -536,6 +551,7 @@ public class Tomasulo {
             } else if (instructionStates.get(loadBuffer[i].insId).state == InstructionState.EXECUTE) {
                 instructionStates.get(loadBuffer[i].insId).exec_timer -= 1;
                 if (instructionStates.get(loadBuffer[i].insId).exec_timer == 0) {
+                    temp4 += 1;
                     instructionStates.get(loadBuffer[i].insId).state = InstructionState.WB;
                     instructionStates.get(loadBuffer[i].insId).exec_comp = cur_T;
                     // get result
@@ -551,6 +567,7 @@ public class Tomasulo {
                 instructionStates.get(loadBuffer[i].insId).state = InstructionState.EXECUTE;
                 instructionStates.get(loadBuffer[i].insId).exec_timer -= 1;
                 if (instructionStates.get(loadBuffer[i].insId).exec_timer == 0) {
+                    temp4++;
                     instructionStates.get(loadBuffer[i].insId).state = InstructionState.WB;
                     instructionStates.get(loadBuffer[i].insId).exec_comp = cur_T;
                     // get result
@@ -561,6 +578,7 @@ public class Tomasulo {
                 break;
             }
         }
+        empty_buffer += temp4;
         /*---------------------------------*/
         /*----------- write back-----------*/
         /*---------------------------------*/
@@ -571,9 +589,9 @@ public class Tomasulo {
             if (instructionStates.get(addReserveStation[i].insId).state == InstructionState.WB) {
                 if (instructionStates.get(addReserveStation[i].insId).exec_comp != cur_T) {
                     addReserveStation[i].busy = false;
-                    empty_adder++;
                     if (addReserveStation[i].op != OP_JUMP) {
-                        F[instructionStates.get(addReserveStation[i].insId).dst] = addReserveStation[i].result;
+                        // F[instructionStates.get(addReserveStation[i].insId).dst] =
+                        // addReserveStation[i].result;
                         broadcast(addReserveStation[i].id, addReserveStation[i].result);
                     }
                     instructionStates.get(addReserveStation[i].insId).state = InstructionState.FINISHED;
@@ -587,9 +605,9 @@ public class Tomasulo {
                 continue;
             if (instructionStates.get(mulReserveStation[i].insId).state == InstructionState.WB) {
                 if (instructionStates.get(mulReserveStation[i].insId).exec_comp != cur_T) {
-                    F[instructionStates.get(mulReserveStation[i].insId).dst] = mulReserveStation[i].result;
+                    // F[instructionStates.get(mulReserveStation[i].insId).dst] =
+                    // mulReserveStation[i].result;
                     mulReserveStation[i].busy = false;
-                    empty_mult++;
                     broadcast(mulReserveStation[i].id, mulReserveStation[i].result);
                     instructionStates.get(mulReserveStation[i].insId).state = InstructionState.FINISHED;
                     instructionStates.get(mulReserveStation[i].insId).wb = cur_T;
@@ -603,12 +621,12 @@ public class Tomasulo {
             if (instructionStates.get(lsReserveStation[i].insId).state == InstructionState.WB) {
                 if (instructionStates.get(lsReserveStation[i].insId).exec_comp != cur_T) {
                     lsReserveStation[i].busy = false;
-                    empty_load++;
                     instructionStates.get(lsReserveStation[i].insId).state = InstructionState.FINISHED;
                     instructionStates.get(lsReserveStation[i].insId).wb = cur_T;
                     if (lsReserveStation[i].op == OP_LDM) {
                         broadcast(lsReserveStation[i].id, lsReserveStation[i].result);
-                        F[instructionStates.get(lsReserveStation[i].insId).dst] = lsReserveStation[i].result;
+                        // F[instructionStates.get(lsReserveStation[i].insId).dst] =
+                        // lsReserveStation[i].result;
                     }
                 }
             }
@@ -620,8 +638,7 @@ public class Tomasulo {
             if (instructionStates.get(loadBuffer[i].insId).state == InstructionState.WB) {
                 if (instructionStates.get(loadBuffer[i].insId).exec_comp != cur_T) {
                     loadBuffer[i].busy = false;
-                    empty_buffer++;
-                    F[instructionStates.get(loadBuffer[i].insId).dst] = loadBuffer[i].result;
+                    // F[instructionStates.get(loadBuffer[i].insId).dst] = loadBuffer[i].result;
                     broadcast(loadBuffer[i].id, loadBuffer[i].result);
                     instructionStates.get(loadBuffer[i].insId).state = InstructionState.FINISHED;
                     instructionStates.get(loadBuffer[i].insId).wb = cur_T;
